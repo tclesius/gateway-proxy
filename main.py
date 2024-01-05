@@ -1,14 +1,23 @@
-import urllib
+import argparse
+import os
 from contextlib import asynccontextmanager
-from urllib.parse import urlparse, parse_qs, unquote_plus
-
+from urllib.parse import unquote_plus
 from aiohttp import ClientResponse
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi import FastAPI, Request, HTTPException
-from pydantic import AnyUrl, AnyHttpUrl
 from manager import RotatingSessionManager
 
-session_manager = RotatingSessionManager()
+aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+targets = os.environ.get('TARGETS')
+verbose = os.environ.get('VERBOSE', False)
+
+session_manager = RotatingSessionManager(
+    aws_access_key_id=aws_access_key_id,
+    aws_secret_access_key=aws_secret_access_key,
+    targets=targets.split() if targets else None,
+    verbose=verbose
+)
 
 
 @asynccontextmanager
@@ -16,7 +25,7 @@ async def lifespan(app: FastAPI):
     global session_manager
     await session_manager.startup_event()
     yield
-    await session_manager.close_sessions()
+    await session_manager.shutdown_event()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -56,4 +65,4 @@ async def proxy(url: str, request: Request):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

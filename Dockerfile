@@ -12,8 +12,6 @@ WORKDIR ./app
 
 COPY pyproject.toml poetry.lock ./
 
-#RUN touch README.md
-
 RUN poetry install --no-root && rm -rf $POETRY_CACHE_DIR
 
 COPY . .

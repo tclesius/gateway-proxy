@@ -13,40 +13,33 @@ from tqdm import tqdm
 # TODO: rethink the way the url is passed to proxy
 # TODO: implement www domain same session as non-www domain
 
-
 class RotatingSessionManager:
-    def __init__(self, verbose=True):
+    def __init__(self, aws_access_key_id, aws_secret_access_key, verbose: bool = False, targets: list[str] = None):
         self._sessions = {}
-        load_dotenv()  # for local development (not really needed in production)
-        self.key_id = os.environ.get('AWS_ACCESS_KEY_ID')
-        self.key_secret = os.environ.get('AWS_SECRET_ACCESS_KEY')
+        self.key_id = aws_access_key_id
+        self.key_secret = aws_secret_access_key
         self.verbose = verbose
+        self.targets = targets
 
         if self.key_id is None:
-            raise Exception("AWS_ACCESS_KEY_ID not set!")
+            raise Exception("AWS_ACCESS_KEY_ID not passed as environment variable!")
         if self.key_secret is None:
-            raise Exception("AWS_SECRET_ACCESS_KEY not set!")
+            raise Exception("AWS_SECRET_ACCESS_KEY not passed as environment variables!")
 
     async def startup_event(self):
-        targets = self.load_startup_targets()
-        if targets is not None:
-            progress_bar = tqdm(total=len(targets), desc="Creating startup sessions")
-            for target in targets:
+        if self.targets is None:
+            return
+
+        for target in self.targets:
+            parsed_url = urlparse(target)
+            if not all([parsed_url.scheme, parsed_url.netloc]):
+                raise Exception(f"Invalid target url: {target}")
+
+        with tqdm(total=len(self.targets), desc="Creating startup sessions", disable=not self.verbose) as progress_bar:
+            for target in self.targets:
                 progress_bar.set_description(f"Creating session for: {target}")
                 await self.create_session(target=target)
                 progress_bar.update(1)
-            progress_bar.close()
-
-    @staticmethod
-    def load_startup_targets():
-        try:
-            with open("startup.yaml", "r") as file:
-                config_data = yaml.safe_load(file)
-                targets = config_data.get("targets", [])
-        except FileNotFoundError:
-            print("Config file not found.")
-            targets = []
-        return targets
 
     async def create_session(self, target: str):
         if self._sessions.get(target) is None:
@@ -57,7 +50,7 @@ class RotatingSessionManager:
                 target=target,
                 key_id=self.key_id,
                 key_secret=self.key_secret,
-                verbose=False
+                verbose=self.verbose
             )
             await self._sessions[target].start()
 
@@ -75,7 +68,7 @@ class RotatingSessionManager:
 
         return self._sessions[target]
 
-    async def close_sessions(self):
+    async def shutdown_event(self):
         # if self.verbose: print(f"[INFO]: Closing all open Http Sessions... ", end='')
         with tqdm(total=len(self._sessions), desc="Closing sessions") as pbar:
             for session_key, session in self._sessions.items():
