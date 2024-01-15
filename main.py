@@ -9,13 +9,12 @@ from manager import RotatingSessionManager
 
 aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
 aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-targets = os.environ.get('TARGETS')
-verbose = os.environ.get('VERBOSE', False)
+targets = os.environ.get('TARGETS', None)
+verbose = os.environ.get('VERBOSE', True)
 
 session_manager = RotatingSessionManager(
     aws_access_key_id=aws_access_key_id,
     aws_secret_access_key=aws_secret_access_key,
-    targets=targets.split() if targets else None,
     verbose=verbose
 )
 
@@ -23,7 +22,7 @@ session_manager = RotatingSessionManager(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global session_manager
-    await session_manager.startup_event()
+    await session_manager.startup_event([target for target in targets.split(",") if target])
     yield
     await session_manager.shutdown_event()
 
