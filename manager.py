@@ -58,10 +58,10 @@ class RotatingSessionManager:
             scheme = "https"
         target = scheme + "://" + netloc
 
-        if self._sessions.get(target) is None:
+        if self._sessions.get(target, None) is None:
             await self.create_session(target=target)
             # TODO: raise ecxeption if session could not be created
-        return self._sessions[target]
+        return self._sessions.get(target)
 
     async def shutdown_event(self):
         for session_key, session in self._sessions.items():
