@@ -1,6 +1,8 @@
+from typing import Union
 from urllib.parse import urlparse
 
 import aiohttp
+import validators
 from aiohttp_ip_rotator import RotatingClientSession
 
 
@@ -24,13 +26,12 @@ class RotatingSessionManager:
             raise Exception("AWS_SECRET_ACCESS_KEY not passed as environment variables!")
 
     @staticmethod
-    async def target_exists(target: str):
+    async def url_accessible(url: str):
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.head(target, timeout=5) as response:
+                async with session.head(url, timeout=5) as response:
                     return bool(response.status)
             except aiohttp.ClientError as e:
-                print(f"Target url: {e} is not accessible (Server not reachable). Maybe a typo?")
                 return False
 
     async def startup_event(self, targets: list[str] = None):
@@ -38,34 +39,43 @@ class RotatingSessionManager:
             return
 
         for target in targets:
-            if await self.target_exists(target):
-                print(f"Creating session for: {target}")
+            if await self.url_accessible(target):
+                print(f"Creating session for: '{target}'")
                 await self.create_session(target=target)
 
-    async def create_session(self, target: str):
-        if self._sessions.get(target) is None:
-            self._sessions[target] = RotatingClientSession(
-                target=target,
-                key_id=self.key_id,
-                key_secret=self.key_secret,
-                verbose=self.verbose
-            )
-            await self._sessions[target].start()
+    async def create_session(self, target: str) -> Union[None, RotatingClientSession]:
+        if not await self.url_accessible(target):
+            print(f"Couldn't create a session for target '{target}' ( Skipped ). Please check if url is valid.")
+            return
 
-    async def get_session(self, url: str, force_ssl=True) -> RotatingClientSession:
+        self._sessions[target] = RotatingClientSession(
+            target=target,
+            key_id=self.key_id,
+            key_secret=self.key_secret,
+            verbose=self.verbose
+        )
+        await self._sessions[target].start()
+        if len(self._sessions[target].endpoints) == 0:
+            self._sessions[target] = None
+            raise Exception(f"Couldn't create a session for '{target}'. Your AWS credentials are probably invalid.")
+
+    async def get_session(self, url: str, force_ssl=True) -> Union[None, RotatingClientSession]:
         scheme, netloc, _, _, _, _ = urlparse(url)
         if force_ssl:
             scheme = "https"
         target = scheme + "://" + netloc
 
+        if not validators.url(target):
+            raise Exception(f"Invalid url: '{url}'")
+
         if self._sessions.get(target, None) is None:
+            print(f"Creating session for '{target}'")
             await self.create_session(target=target)
-            # TODO: raise ecxeption if session could not be created
         return self._sessions.get(target)
 
     async def shutdown_event(self):
         for session_key, session in self._sessions.items():
-            print(f"Closing session for: {session_key}")
+            print(f"Closing session for '{session_key}'")
             await session.close()
         self._sessions.clear()
 

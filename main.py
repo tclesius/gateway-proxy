@@ -5,6 +5,8 @@ from urllib.parse import unquote_plus
 from aiohttp import ClientResponse
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi import FastAPI, Request, HTTPException
+from pydantic import AnyHttpUrl
+
 from manager import RotatingSessionManager
 
 aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
@@ -34,9 +36,9 @@ app = FastAPI(lifespan=lifespan)
 async def proxy(url: str, request: Request):
     try:
         url = unquote_plus(url)
-
         cookies = request.cookies.items()
         session = await session_manager.get_session(url=url)
+
         response: ClientResponse = await session.get(url, cookies=cookies)
 
         if response.status != 200:
