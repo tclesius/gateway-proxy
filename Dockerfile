@@ -5,7 +5,8 @@ WORKDIR /usr/src/app/
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_ROOT_USER_ACTION=ignore \
-    POETRY_VIRTUALENVS_IN_PROJECT=true
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    PYTHONUNBUFFERED=1
 
 RUN pip install -U pip setuptools wheel -q && \
     pip install poetry -q
