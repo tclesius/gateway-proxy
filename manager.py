@@ -18,7 +18,7 @@ coloredlogs.install(fmt='%(levelname)-9s %(message)s')
 # TODO: rethink the way the url is passed to proxy
 # TODO: implement www domain same session as non-www domain
 
-class LoggedRotatingClientSession(RotatingClientSession):
+class LRotatingClientSession(RotatingClientSession):
     def __init__(self, target: str, key_id: Optional[str] = None, key_secret: Optional[str] = None,
                  host_header: Optional[str] = None, verbose: bool = False, *args, **kwargs):
         super().__init__(target, key_id, key_secret, host_header, verbose, *args, **kwargs)
@@ -68,7 +68,7 @@ class RotatingSessionManager:
             )
             return
 
-        self._sessions[target] = RotatingClientSession(
+        self._sessions[target] = LRotatingClientSession(
             target=target,
             key_id=self.key_id,
             key_secret=self.key_secret,
