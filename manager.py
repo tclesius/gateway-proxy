@@ -73,8 +73,10 @@ class RotatingSessionManager:
             key_id=self.key_id,
             key_secret=self.key_secret,
             verbose=self.verbose
-        ).start()
+        )
+
         await self._sessions[target].start()
+
         if len(self._sessions[target].endpoints) == 0:
             self._sessions[target] = None
             logging.exception(f"Couldn't create a session for '{target}'. AWS credentials are probably invalid.")
