@@ -64,3 +64,8 @@ async def proxy(url: str, request: Request):
     except Exception as e:
         logging.exception(f"Internal server error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
