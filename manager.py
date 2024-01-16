@@ -1,9 +1,15 @@
-from typing import Union
+from typing import Union, Optional
 from urllib.parse import urlparse
 
 import aiohttp
 import validators
 from aiohttp_ip_rotator import RotatingClientSession
+import coloredlogs, logging
+import sys
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+
+coloredlogs.install(fmt='%(levelname)-9s %(message)s')
 
 
 # TODO: implement logging in grafana
@@ -11,6 +17,15 @@ from aiohttp_ip_rotator import RotatingClientSession
 # TODO: implement session throwaway/restart after x http errors
 # TODO: rethink the way the url is passed to proxy
 # TODO: implement www domain same session as non-www domain
+
+class LoggedRotatingClientSession(RotatingClientSession):
+    def __init__(self, target: str, key_id: Optional[str] = None, key_secret: Optional[str] = None,
+                 host_header: Optional[str] = None, verbose: bool = False, *args, **kwargs):
+        super().__init__(target, key_id, key_secret, host_header, verbose, *args, **kwargs)
+
+    def _print_if_verbose(self, message: str):
+        if self.verbose: logging.info(message)
+
 
 class RotatingSessionManager:
     def __init__(self, aws_access_key_id: str, aws_secret_access_key: str, verbose: bool = False):
@@ -21,9 +36,11 @@ class RotatingSessionManager:
         self.targets = []
 
         if self.key_id is None:
-            raise Exception("AWS_ACCESS_KEY_ID not passed as environment variable!")
+            logging.exception("AWS_ACCESS_KEY_ID must be passed as environment variable!")
+            exit(0)
         if self.key_secret is None:
-            raise Exception("AWS_SECRET_ACCESS_KEY not passed as environment variables!")
+            logging.exception("AWS_ACCESS_KEY_ID must be passed as environment variable!")
+            exit(0)
 
     @staticmethod
     async def url_accessible(url: str):
@@ -35,17 +52,20 @@ class RotatingSessionManager:
                 return False
 
     async def startup_event(self, targets: list[str] = None):
-        if targets is None or not isinstance(targets, list):
+        if not isinstance(targets, list) or len(targets) == 0:
+            logging.info("No targets passed.")
             return
 
         for target in targets:
             if await self.url_accessible(target):
-                print(f"Creating session for: '{target}'")
+                logging.info(f"Creating session for: '{target}'")
                 await self.create_session(target=target)
 
     async def create_session(self, target: str) -> Union[None, RotatingClientSession]:
         if not await self.url_accessible(target):
-            print(f"Couldn't create a session for target '{target}' ( Skipped ). Please check if url is valid.")
+            logging.warning(
+                f"Couldn't create a session for target '{target}' ( Skipped ). Please check if url is valid."
+            )
             return
 
         self._sessions[target] = RotatingClientSession(
@@ -53,11 +73,11 @@ class RotatingSessionManager:
             key_id=self.key_id,
             key_secret=self.key_secret,
             verbose=self.verbose
-        )
+        ).start()
         await self._sessions[target].start()
         if len(self._sessions[target].endpoints) == 0:
             self._sessions[target] = None
-            raise Exception(f"Couldn't create a session for '{target}'. Your AWS credentials are probably invalid.")
+            logging.exception(f"Couldn't create a session for '{target}'. AWS credentials are probably invalid.")
 
     async def get_session(self, url: str, force_ssl=True) -> Union[None, RotatingClientSession]:
         scheme, netloc, _, _, _, _ = urlparse(url)
@@ -69,13 +89,13 @@ class RotatingSessionManager:
             raise Exception(f"Invalid url: '{url}'")
 
         if self._sessions.get(target, None) is None:
-            print(f"Creating session for '{target}'")
+            logging.info(f"Creating session for '{target}'")
             await self.create_session(target=target)
         return self._sessions.get(target)
 
     async def shutdown_event(self):
         for session_key, session in self._sessions.items():
-            print(f"Closing session for '{session_key}'")
+            logging.info(f"Closing session for '{session_key}'")
             await session.close()
         self._sessions.clear()
 

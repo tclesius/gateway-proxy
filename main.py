@@ -1,17 +1,16 @@
-import argparse
 import os
 from contextlib import asynccontextmanager
 from urllib.parse import unquote_plus
 from aiohttp import ClientResponse
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi import FastAPI, Request, HTTPException
-from pydantic import AnyHttpUrl
+import coloredlogs, logging
 
 from manager import RotatingSessionManager
 
 aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
 aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-targets = os.environ.get('TARGETS', None)
+targets = os.environ.get('TARGETS', '')
 verbose = os.environ.get('VERBOSE', True)
 
 session_manager = RotatingSessionManager(
@@ -24,8 +23,10 @@ session_manager = RotatingSessionManager(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global session_manager
+    logging.info(f"Starting up session manager")
     await session_manager.startup_event([target for target in targets.split(",") if target])
     yield
+    logging.info(f"Shutting down session manager")
     await session_manager.shutdown_event()
 
 
@@ -42,6 +43,7 @@ async def proxy(url: str, request: Request):
         response: ClientResponse = await session.get(url, cookies=cookies)
 
         if response.status != 200:
+            logging.exception(f"Failed to fetch data from '{url}'")
             raise HTTPException(status_code=response.status, detail="Failed to fetch data")
 
         content_type = response.headers.get("Content-Type", "")
@@ -60,4 +62,5 @@ async def proxy(url: str, request: Request):
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
+        logging.exception(f"Internal server error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
