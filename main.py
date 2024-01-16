@@ -66,6 +66,7 @@ async def proxy(url: str, request: Request):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
+@app.head('/health')
 @app.get("/health")
 async def health():
     return {"status": "ok"}
