@@ -23,7 +23,8 @@ session_manager = RotatingSessionManager(
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI, startup_timeout=10):
+async def lifespan(app: FastAPI):
+    startup_timeout = 30
     logging.info(f"Waiting for {startup_timeout} seconds before starting up session manager")
     while startup_timeout > 0:
         # here because unit restarts to apply configs,
