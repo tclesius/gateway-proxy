@@ -1,12 +1,10 @@
-import asyncio
 import os
-import time
 from contextlib import asynccontextmanager
 from urllib.parse import unquote_plus
 from aiohttp import ClientResponse
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi import FastAPI, Request, HTTPException
-import coloredlogs, logging
+import logging
 
 from manager import RotatingSessionManager
 
@@ -24,15 +22,6 @@ session_manager = RotatingSessionManager(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    startup_timeout = 30
-    logging.info(f"Waiting for {startup_timeout} seconds before starting up session manager")
-    while startup_timeout > 0:
-        # here because unit restarts to apply configs,
-        # and we don't want to create sessions only for deletion
-        logging.info(f"{startup_timeout}s left")
-        await asyncio.sleep(1)
-        startup_timeout -= 1
-
     global session_manager
     logging.info(f"Starting up session manager")
     await session_manager.startup_event([target for target in targets.split(",") if target])
